@@ -126,13 +126,13 @@ module Sensu
         ['Can be filtered', 0]
       end
 
-      def api_request(resource, method, event)
+      def api_request(resource, method_name, event)
         filter = @filters[name]
         http = filter['http']
         # header = { 'Content-Type' => 'application/json' }
         body = { path: filter['channel_name'] + '/' + event[:client][:name] + '/' + event[:check][:name], content: { status: event[:check][:status] } }
 
-        case method
+        case method_name
         when 'GET'
           req =  Net::HTTP::Get.new(resource)
         when 'POST'
@@ -146,8 +146,11 @@ module Sensu
         begin
           r = http.request(req)
           return r
-        rescue
+        rescue Exception => e
           logger.error("Sensu stash error for #{event[:client][:name]}/#{event[:check][:name]} for status #{event[:check][:status]}")
+          logger.error(e.message)
+          logger.error(e.backtrace)
+          logger.error("Http: #{http}, Body: #{body}, Method: #{method_name}")
         end
       end
 
