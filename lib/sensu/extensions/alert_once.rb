@@ -41,6 +41,8 @@ module Sensu
         username         = if config.key?(:username) then config[:username] else nil end
         password         = if config.key?(:password) then config[:password] else nil end
         channel_name     = if config.key?(:channel_name) then config[:channel_name] else 'notification' end
+        retry_request    = if config.key?(:retry_request) then config[:retry_request] else 3 end
+        retry_interval   = if config.key?(:retry_interval) then config[:retry_interval] else 5 end
 
         string = "#{protocol}://#{hostname}:#{port}"
         uri = URI(string)
@@ -58,7 +60,9 @@ module Sensu
           "uri" => uri,
           "username" => username,
           "password" => password,
-          "channel_name" => channel_name
+          "channel_name" => channel_name,
+          "retry_request" => retry_request,
+          "retry_interval" => retry_interval
         }
 
         @logger.info("#{name}: successfully initialized filter: hostname: #{hostname}, port: #{port}, uri: #{uri.to_s}")
@@ -143,10 +147,14 @@ module Sensu
         req.body = body.to_json
         req.basic_auth(filter['username'], filter['password']) if filter['username'] && filter['password']
 
+        retries = 0
         begin
           r = http.request(req)
           return r
-        rescue Exception => e
+        rescue StandardError => e
+          logger.info("Retrying Stash API")
+          sleep @filters[name]['retry_interval']
+          retry if (retries += 1) < @filters[name]['retry_request']
           logger.error("Sensu stash error for #{event[:client][:name]}/#{event[:check][:name]} for status #{event[:check][:status]}")
           logger.error(e.message)
           logger.error(e.backtrace)
