@@ -138,4 +138,31 @@ describe "Sensu::Extension::Alertonce" do
     end
   end
 
+  it "Testing timeout Exception handling" do
+    # Simulate timeout
+    stub_request(:get, /http:\/\/testsensuapi:4567/).to_timeout.then.#to_return(status: 404)
+    to_return(status: 200, body: "{\"status\":2}")
+    stub_request(:delete, /http:\/\/testsensuapi:4567/).to_return(status: 200)
+
+    #WebMock.allow_net_connect!
+
+    async_wrapper do
+      event = event_template
+      @extension.safe_run(event) do |output, status|
+        event[:occurrences] = 1
+        event[:status] = 0
+        event[:action] = :resolve
+        @extension.safe_run(event) do |output, status|
+          expect(status).to eq(1) # Create alert
+          async_done
+        end
+          filter = @extension.instance_variable_get("@filters")["alert_once"]
+          retries = @extension.instance_variable_get("@retries")
+          expect(filter['retry_interval']).to eq(5)
+          expect(filter['retry_request']).to eq(3)
+          #expect(logger).to receive(:info).with("alert_once: successfully initialized filter: hostname: testsensuapi, port: 4567, uri: http://testsensuapi:4567")
+          #expect(logger).to receive(:info).with("Retrying Stash API")
+      end
+    end
+  end
 end
